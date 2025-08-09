@@ -3,13 +3,11 @@ wordpress:
     url: https://nvidianews.nvidia.com/wp-json/wp/v2/posts?per_page=1&orderby=date
   - ticker: AAPL
     url: https://www.apple.com/newsroom/wp-json/wp/v2/posts?per_page=1&orderby=date
-
 sitemaps:
   - ticker: AAPL
     url: https://investor.apple.com/sitemap.xml
   - ticker: MSFT
     url: https://www.microsoft.com/en-us/Investor/sitemap.xml
-
 cdn_candidates:
   - ticker: NVDA
     urls:
@@ -17,7 +15,6 @@ cdn_candidates:
   - ticker: AAPL
     urls:
       - https://investor.apple.com/newsroom/media/releases/earnings_q3_2025.pdf
-
 halts:
   - name: nasdaq
     url: https://www.nasdaqtrader.com/dynamic/symdir/nasdaqhalts.txt

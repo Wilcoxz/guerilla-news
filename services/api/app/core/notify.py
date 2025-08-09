@@ -1,20 +1,18 @@
-import os, asyncio, time
-from typing import List, Dict
-import httpx
+import os, asyncio, json, httpx
+WEBHOOK = os.getenv("SLACK_WEBHOOK","").strip()
 
-SLACK_WEBHOOK = os.getenv("SLACK_WEBHOOK", "")
-
-async def send_slack_batch(events: List[Dict]):
-    if not SLACK_WEBHOOK or not events:
-        return
+async def send_slack_batch(events: list[dict]):
+    if not WEBHOOK: return
     lines = []
-    for e in events[:10]:
-        t = e.get("ticker") or "N/A"
-        src = e.get("source","?")
-        url = e.get("url","")
-        title = (e.get("title") or "")[:110]
-        display = title if title else url
-        lines.append(f"[{src}] {t} — {display} — {url}")
-    text = "*Guerilla News — new events*\n" + "\n".join(lines)
+    for e in events[:12]:
+        src = (e.get("source") or "").upper()
+        tkr = e.get("ticker") or "N/A"
+        title = (e.get("title") or e.get("url") or "")[:140]
+        url = e.get("url") or ""
+        lines.append(f"[{src}] {tkr} — {title}\n{url}")
+    text = "*Guerilla News — New events*\n" + "\n\n".join(lines)
     async with httpx.AsyncClient(timeout=5.0) as c:
-        await c.post(SLACK_WEBHOOK, json={"text": text})
+        try:
+            await c.post(WEBHOOK, json={"text": text})
+        except Exception:
+            pass

@@ -1,59 +1,52 @@
-import asyncio, yaml, csv, io, json
+import asyncio, csv, io, json
 from datetime import datetime
 from ..core.http import Http
+from ..core.config import get_config
 from ..core.dedupe import signature
 
-TAG = "[HALTS]"
+TAG="[HALTS]"
 
-def parse_nasdaq_txt(text: str):
-    # file is pipe- or tab-aligned; split on whitespace preserving columns
-    lines = [ln for ln in text.splitlines() if ln.strip()]
-    # try CSV with delimiter=|, else fallback
-    try:
-        for row in csv.DictReader(io.StringIO(text), delimiter='|'):
-            yield row
-        return
-    except Exception:
-        pass
-    # fallback: simple split
-    headers = lines[0].split()
-    for ln in lines[1:]:
-        parts = ln.split()
-        if len(parts) >= len(headers):
-            yield dict(zip(headers, parts))
-
-async def run(add_event, cfg_path: str):
+async def run(add_event):
     http = Http()
+    seen = set()
     try:
         while True:
-            with open(cfg_path, "r") as f:
-                cfg = yaml.safe_load(f) or {}
-            items = cfg.get("halts", []) or []
-            for it in items:
-                url = it.get("url"); name = it.get("name","halts")
+            cfg = get_config()
+            for item in (cfg.get("halts") or []):
+                url = item.get("url"); name=item.get("name","nasdaq")
                 if not url: continue
                 try:
                     r = await http.get(url)
+                    if r.status_code == 304: continue
                     if r.status_code != 200: continue
-                    for row in parse_nasdaq_txt(r.text) or []:
-                        sym = (row.get("Symbol") or row.get("IssueSymbol") or "").strip()
-                        reason = (row.get("Reason Code") or row.get("Reason") or "")
-                        href = url
+                    text = r.text
+                    # nasdaq txt is pipe-separated; try csv first, fallback to manual parse
+                    rows = []
+                    try:
+                        f = io.StringIO(text)
+                        reader = csv.DictReader(f, delimiter='|')
+                        rows = list(reader)
+                    except Exception:
+                        pass
+                    for rowd in rows[:200]:
+                        sym = (rowd.get("Symbol") or rowd.get("Issue Symbol") or "").strip().upper()
                         if not sym: continue
-                        sig = signature("halts", f"{href}#{sym}", reason, "")
+                        reason = (rowd.get("Reason Code") or rowd.get("Reason") or "").strip()
+                        ts = (rowd.get("Halt Time") or rowd.get("Halt Date") or rowd.get("Halt Time (ET)") or "").strip()
+                        key = f"{sym}|{reason}|{ts}"
+                        sig = signature("halts", url, key, "")
+                        if sig in seen: continue
+                        seen.add(sig)
                         payload = {
-                            "ticker": sym,
-                            "source": "halts",
-                            "url": href,
-                            "title": f"Halt: {sym} ({reason})",
-                            "snippet": "",
-                            "signature": sig,
-                            "seen_at": datetime.utcnow().isoformat(),
-                            "meta": json.dumps(row),
+                            "ticker": sym, "source":"halts", "url": url,
+                            "title": f"Halt {sym} ({reason})",
+                            "snippet": ts,
+                            "signature": sig, "seen_at": datetime.utcnow().isoformat(),
+                            "meta": json.dumps({"feed": name, "raw": rowd})
                         }
                         await add_event(payload, notify=True, log_prefix=TAG)
                 except Exception:
                     pass
-            await asyncio.sleep(15)
+            await asyncio.sleep(10)
     finally:
         await http.close()
