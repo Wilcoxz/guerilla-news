@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Guerilla News</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>body{padding:1rem} table{font-size:.95rem}</style>
+</head>
+<body>
+  <h2>Guerilla News — Live Events</h2>
+  <div>
+    <label>Ticker <input id="f_ticker" placeholder="AAPL"/></label>
+    <label>Source <input id="f_source" placeholder="cdn/cms/sitemap/halts/demo"/></label>
+    <label>Limit <input id="f_limit" type="number" value="200" style="width:100px"/></label>
+    <button id="refresh">Refresh</button>
+    <small id="stamp"></small>
+  </div>
+  <table>
+    <thead><tr><th>Time (UTC)</th><th>Ticker</th><th>Source</th><th>Title</th><th>Link</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+<script>
+async function load() {
+  const t=document.getElementById('f_ticker').value.trim();
+  const s=document.getElementById('f_source').value.trim();
+  const l=document.getElementById('f_limit').value||200;
+  const u = new URL('/events', location.origin);
+  if(t) u.searchParams.set('ticker', t);
+  if(s) u.searchParams.set('source', s);
+  u.searchParams.set('limit', l);
+  const r = await fetch(u);
+  const data = await r.json();
+  const tbody = document.getElementById('rows');
+  tbody.innerHTML = data.map(d=>`
+    <tr>
+      <td>${new Date(d.seen_at).toISOString().replace('T',' ').slice(0,19)}</td>
+      <td>${d.ticker||''}</td>
+      <td>${d.source}</td>
+      <td>${(d.title||'').slice(0,140)}</td>
+      <td><a href="${d.url}" target="_blank">open</a></td>
+    </tr>`).join('');
+  document.getElementById('stamp').textContent = "Last refresh: " + new Date().toLocaleTimeString();
+}
+document.getElementById('refresh').onclick = load;
+setInterval(load, 5000); load();
+</script>
+</body>
+</html>
